@@ -1,0 +1,22 @@
+#pragma ones
+
+/**
+ * \file   version.h
+ * \author evgenyko
+ * \date   2018
+ * \brief  version.h for OTUS C++ homework
+ *
+ * \details Contains current build number
+ */
+
+#cmakedefine PROJECT_VERSION_PATCH @PROJECT_VERSION_PATCH@
+
+
+/**
+ * \returns Current build number
+ */
+int version()
+{
+    return PROJECT_VERSION_PATCH;
+}
+
