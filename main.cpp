@@ -1,145 +1,142 @@
 #include <iostream>
-#include <list>
+#include <deque> //check
+#include <set>   //check
 
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 
 #include "string.h"
 #include "version.h"
+#include "bulk.h"
 
 using namespace std;
 using boost::asio::ip::tcp;
 
-class chat_session
-        : //public chat_participant,
-        public std::enable_shared_from_this<chat_session>
+using chat_message = std::string;
+
+typedef std::deque<chat_message> chat_message_queue;
+
+class bulk_participant
 {
 public:
-    chat_session(tcp::socket socket/*, chat_room& room*/)
-        : socket_(std::move(socket))
-        //room_(room)
+    virtual ~bulk_participant() {}
+    //virtual void deliver(const chat_message& msg) = 0;
+};
+
+typedef std::shared_ptr<bulk_participant> bulk_participant_ptr;
+
+class bulk_room
+{
+public:
+    bulk_room(bulk::BulkContext &bulk) : bulk_(bulk) {}
+
+    void join(bulk_participant_ptr participant)
     {
-        cout << "chat_session socket: " << socket.native() << endl;
-        offset = 0;
+        participants_.insert(participant);
+        //for (auto msg: recent_msgs_)
+            //participant->deliver(msg);
+    }
+
+    void leave(bulk_participant_ptr participant)
+    {
+        participants_.erase(participant);
+        bulk_.end_input();
+    }
+
+    void deliver(const chat_message& msg)
+    {
+        recent_msgs_.push_back(msg);
+        while (recent_msgs_.size() > max_recent_msgs)
+            recent_msgs_.pop_front();
+
+//        for (auto participant: participants_)
+//            participant->deliver(msg);
+    }
+
+private:
+    std::set<bulk_participant_ptr> participants_;
+    enum { max_recent_msgs = 100 };
+    chat_message_queue recent_msgs_;
+    bulk::BulkContext &bulk_;
+};
+
+class bulk_session
+        : public bulk_participant,
+          public std::enable_shared_from_this<bulk_session>
+{
+public:
+    bulk_session(tcp::socket socket, bulk_room& room)
+        : socket_(std::move(socket)),
+          room_(room)
+    {
     }
 
     void start()
     {
-        cout << "chat_session start " << endl;
-        //room_.join(shared_from_this());
-        do_read_header();
+        room_.join(shared_from_this());
+        do_read_message();
     }
 
-    //  void deliver(const chat_message& msg)
-    //  {
-    //    bool write_in_progress = !write_msgs_.empty();
-    //    write_msgs_.push_back(msg);
-    //    if (!write_in_progress)
-    //    {
-    //      do_write();
-    //    }
-    //  }
-
 private:
-    int offset;
-
-
-    void do_read_header()
+    size_t read_complete(char * buf, const error_code & err, size_t bytes)
     {
+        if ( err) return 0;
+        bool found = std::find(buf, buf + bytes, '\n') < buf + bytes;
+        return found ? 0 : 1;
+    }
 
+    void do_read_message()
+    {
         auto self(shared_from_this());
-        boost::asio::async_read_until(socket_, sb, "\n",
-                                //boost::asio::buffer(str/*, 100*/), "\n",
-                                [this, self/*, str*/](boost::system::error_code ec, std::size_t /*length*/)
+        boost::asio::async_read(socket_,
+                                boost::asio::buffer(str),
+                                boost::bind(&bulk_session::read_complete, this, str, _1, _2),
+                                [this, self](boost::system::error_code ec, std::size_t /*length*/)
         {
-            if (!ec/* && read_msg_.decode_header()*/)
+            if (!ec)
             {
-                std::istream is(&sb);
-                std::string line;
-                std::getline(is, line);
-
-                cout << "do_read_header " << line << endl;
-                do_read_header();
+                cout << "do_read_message " << str << " id = " << self <<endl;
+                do_read_message();
             }
             else
             {
-                cout << "do_read_header ec = " << ec.message() << endl;
-                //room_.leave(shared_from_this());
+                cout << "do_read_message ec = " << ec.message() << endl;
+                room_.leave(shared_from_this());
             }
         });
     }
 
-    //  void do_read_body()
-    //  {
-    //    auto self(shared_from_this());
-    //    boost::asio::async_read(socket_,
-    //        boost::asio::buffer(read_msg_.body(), read_msg_.body_length()),
-    //        [this, self](boost::system::error_code ec, std::size_t /*length*/)
-    //        {
-    //          if (!ec)
-    //          {
-    //            room_.deliver(read_msg_);
-    //            do_read_header();
-    //          }
-    //          else
-    //          {
-    //            room_.leave(shared_from_this());
-    //          }
-    //        });
-    //  }
-
-    //  void do_write()
-    //  {
-    //    auto self(shared_from_this());
-    //    boost::asio::async_write(socket_,
-    //        boost::asio::buffer(write_msgs_.front().data(),
-    //          write_msgs_.front().length()),
-    //        [this, self](boost::system::error_code ec, std::size_t /*length*/)
-    //        {
-    //          if (!ec)
-    //          {
-    //            write_msgs_.pop_front();
-    //            if (!write_msgs_.empty())
-    //            {
-    //              do_write();
-    //            }
-    //          }
-    //          else
-    //          {
-    //            room_.leave(shared_from_this());
-    //          }
-    //        });
-    //  }
 
     tcp::socket socket_;
-    boost::asio::streambuf sb;
-    //  chat_room& room_;
+    char str[512];
+    bulk_room& room_;
     //  chat_message read_msg_;
     //  chat_message_queue write_msgs_;
 };
 
-class chat_server
+class bulk_server
 {
 public:
-    chat_server(boost::asio::io_service& io_service,
-                const tcp::endpoint& endpoint)
+    bulk_server(boost::asio::io_service& io_service,
+                const tcp::endpoint& endpoint,
+                const int bulk_size_)
         : acceptor_(io_service, endpoint),
           socket_(io_service)
     {
+        bulk_ = make_unique<bulk::BulkContext>(bulk_size_);
+        room_ = make_unique<bulk_room>(*bulk_);
         do_accept();
     }
 
 private:
     void do_accept()
     {
-        cout << "do_accept!" << endl;
         acceptor_.async_accept(socket_,
                                [this](boost::system::error_code ec)
         {
             if (!ec)
             {
-                cout << "async_accept!" << endl;
-                std::make_shared<chat_session>(std::move(socket_)/*, room_*/)->start();
+                std::make_shared<bulk_session>(std::move(socket_), *room_)->start();
             }
 
             do_accept();
@@ -148,7 +145,9 @@ private:
 
     tcp::acceptor acceptor_;
     tcp::socket socket_;
-    //chat_room room_;
+    unique_ptr<bulk_room> room_;
+    unique_ptr<bulk::BulkContext> bulk_;
+
 };
 
 int main(int argc, char* argv[])
@@ -177,14 +176,9 @@ int main(int argc, char* argv[])
         }
 
         boost::asio::io_service io_service;
+        tcp::endpoint endpoint(tcp::v4(), port);
 
-        std::list<chat_server> servers;
-        //for (int i = 1; i < argc; ++i)
-        {
-            tcp::endpoint endpoint(tcp::v4(), port);
-            servers.emplace_back(io_service, endpoint);
-        }
-
+        bulk_server server(io_service, endpoint, bulk_size);
         io_service.run();
     }
     catch (std::exception& e)
