@@ -80,7 +80,14 @@ public:
         auto self(shared_from_this());
         boost::asio::async_read(socket_,
                                 boost::asio::buffer(str),
-                                boost::bind(&bulk_session::read_complete, this, str, _1, _2),
+                                //boost::bind(&bulk_session::read_complete, this, str, _1, _2),
+                                [this](const boost::system::error_code & err, size_t bytes)->size_t
+        {
+            if ( err) return 0;
+            bool found = std::find(str, str + bytes, '\n') < str + bytes;
+            str[bytes] = '\0';
+            return found ? 0 : 1;
+        },
                                 [this, self](boost::system::error_code ec, std::size_t /*length*/)
         {
             if (!ec)
