@@ -104,12 +104,10 @@ public:
     std::string get_unique_number();
 };
 
-
-class BulkContext
+class BulkSessionProcessor
 {
-    static constexpr char delimiter = '\n';
-    size_t bulk_size;
-    std::shared_ptr<Dumper> dumper;
+public:
+    BulkSessionProcessor();
 
     Commands cmds;
     Metrics metrics;
@@ -117,8 +115,13 @@ class BulkContext
     size_t lines_count;
     bool blockFound;
     int nestedBlocksCount;
+};
 
-    void dump_block();
+class BulkContext
+{
+    static constexpr char delimiter = '\n';
+    size_t bulk_size;
+    std::shared_ptr<Dumper> dumper;
 
     std::thread cdt, fdt1, fdt2;
     Metrics log_metr, file1_metr, file2_metr;
@@ -130,8 +133,9 @@ public:
     BulkContext(size_t bulk_size_);
     ~BulkContext();
 
-    void add_line(std::string &cmd);
-    void end_input();
+    void add_line(std::string &cmd, BulkSessionProcessor &session_cmds, BulkSessionProcessor &shared_cmds);
+    void dump_block(BulkSessionProcessor &commands);
+    //void end_input();
     void print_metrics();
 };
 

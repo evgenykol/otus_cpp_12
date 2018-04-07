@@ -1,6 +1,7 @@
 #include <iostream>
 #include <deque> //check
 #include <set>   //check
+#include <map>
 
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
@@ -12,9 +13,7 @@
 using namespace std;
 using boost::asio::ip::tcp;
 
-using chat_message = std::string;
 
-typedef std::deque<chat_message> chat_message_queue;
 
 class bulk_participant
 {
@@ -32,31 +31,33 @@ public:
 
     void join(bulk_participant_ptr participant)
     {
-        participants_.insert(participant);
-        //for (auto msg: recent_msgs_)
-            //participant->deliver(msg);
+        cout << "bulk_room join" << endl;
+        participants_.emplace(std::make_pair(participant, bulk::BulkSessionProcessor()));
     }
 
     void leave(bulk_participant_ptr participant)
     {
+        cout << "bulk_room leave" << endl;
         participants_.erase(participant);
-        bulk_.end_input();
+//        if (participants_.empty())
+//        {
+//            if(commands.metrics.commands)
+//            {
+//                bulk_.dump_block(commands);
+//            }
+//            bulk_.print_metrics();
+//        }
     }
 
-    void deliver(const chat_message& msg)
+    void deliver(const bulk_participant_ptr participant, std::string& msg)
     {
-        recent_msgs_.push_back(msg);
-        while (recent_msgs_.size() > max_recent_msgs)
-            recent_msgs_.pop_front();
-
-//        for (auto participant: participants_)
-//            participant->deliver(msg);
+        bulk_.add_line(msg, participants_[participant], commands);
     }
 
 private:
-    std::set<bulk_participant_ptr> participants_;
-    enum { max_recent_msgs = 100 };
-    chat_message_queue recent_msgs_;
+    std::map<bulk_participant_ptr, bulk::BulkSessionProcessor> participants_;
+    bulk::BulkSessionProcessor commands;
+
     bulk::BulkContext &bulk_;
 };
 
@@ -77,17 +78,19 @@ public:
         do_read_message();
     }
 
-private:
     size_t read_complete(char * buf, const error_code & err, size_t bytes)
     {
         if ( err) return 0;
         bool found = std::find(buf, buf + bytes, '\n') < buf + bytes;
+        buf[bytes] = '\0';
         return found ? 0 : 1;
     }
 
     void do_read_message()
     {
         auto self(shared_from_this());
+//        boost::asio::async_read_until(socket_, sb, "\n",
+//                                [this, self](boost::system::error_code ec, std::size_t /*length*/)
         boost::asio::async_read(socket_,
                                 boost::asio::buffer(str),
                                 boost::bind(&bulk_session::read_complete, this, str, _1, _2),
@@ -95,7 +98,17 @@ private:
         {
             if (!ec)
             {
-                cout << "do_read_message " << str << " id = " << self <<endl;
+//                std::istream is(&sb);
+//                std::string line;
+//                std::getline(is, line);
+//                sb.consume(sb.size());
+//                cout << line << endl;
+
+                //cout.write(str, strnlen(str, 512));
+                std::string s = string{str};
+                s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
+                room_.deliver(self, s);
+
                 do_read_message();
             }
             else
@@ -106,12 +119,10 @@ private:
         });
     }
 
-
     tcp::socket socket_;
     char str[512];
-    bulk_room& room_;
-    //  chat_message read_msg_;
-    //  chat_message_queue write_msgs_;
+    boost::asio::streambuf sb;
+    bulk_room &room_;
 };
 
 class bulk_server
@@ -123,8 +134,8 @@ public:
         : acceptor_(io_service, endpoint),
           socket_(io_service)
     {
-        bulk_ = make_unique<bulk::BulkContext>(bulk_size_);
-        room_ = make_unique<bulk_room>(*bulk_);
+        bulk_ = make_shared<bulk::BulkContext>(bulk_size_);
+        room_ = make_shared<bulk_room>(*bulk_);
         do_accept();
     }
 
@@ -138,6 +149,10 @@ private:
             {
                 std::make_shared<bulk_session>(std::move(socket_), *room_)->start();
             }
+            else
+            {
+                cout << "do_accept error " << ec.message() << endl;
+            }
 
             do_accept();
         });
@@ -145,9 +160,8 @@ private:
 
     tcp::acceptor acceptor_;
     tcp::socket socket_;
-    unique_ptr<bulk_room> room_;
-    unique_ptr<bulk::BulkContext> bulk_;
-
+    shared_ptr<bulk_room> room_;
+    shared_ptr<bulk::BulkContext> bulk_;
 };
 
 int main(int argc, char* argv[])
@@ -163,7 +177,7 @@ int main(int argc, char* argv[])
             cout << "version " << version() << endl;
             return 0;
         }
-        else if (argc > 1)
+        else if (argc == 3)
         {
             port = atoi(argv[1]);
             bulk_size = atoi(argv[2]);

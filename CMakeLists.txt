@@ -22,7 +22,7 @@ set_target_properties(bulk_server bulk_lib
                 CXX_STANDARD 14
                 CXX_STANDARD_REQUIRED ON
                 CMAKE_CXX_EXTENSIONS OFF
-                COMPILE_DEFINITIONS BOOST_ASIO_ENABLE_HANDLER_TRACKING
+                #COMPILE_DEFINITIONS BOOST_ASIO_ENABLE_HANDLER_TRACKING
                 COMPILE_OPTIONS -Wpedantic -Wall -Wextra
 )
 

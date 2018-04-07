@@ -217,19 +217,23 @@ void FileDumper::dumper(Metrics &metrics)
     }
 }
 
-BulkContext::BulkContext(size_t bulk_size_)
+BulkSessionProcessor::BulkSessionProcessor()
 {
-    //cout << "ctor BulkContext" << endl;
-    bulk_size = bulk_size_;
     blockFound = false;
     nestedBlocksCount = 0;
     lines_count = 0;
+}
+
+BulkContext::BulkContext(size_t bulk_size_)
+{
+    cout << "ctor BulkContext" << endl;
+    bulk_size = bulk_size_;
 
     dumper = make_shared<Dumper>();
     conDumper = make_shared<ConsoleDumper>(dumper);
     fileDumper = make_shared<FileDumper>(dumper);
 
-    bulk::Metrics log_metr, file1_metr, file2_metr;
+    Metrics log_metr, file1_metr, file2_metr;
     cdt = thread(&ConsoleDumper::dumper, this->conDumper, std::ref(log_metr));
     fdt1 = thread(&FileDumper::dumper, this->fileDumper, std::ref(file1_metr));
     fdt2 = thread(&FileDumper::dumper, this->fileDumper, std::ref(file2_metr));
@@ -238,87 +242,86 @@ BulkContext::BulkContext(size_t bulk_size_)
 
 BulkContext::~BulkContext()
 {
-    //cout << "dtor BulkContext" << endl;
-    cdt.join();
-    fdt1.join();
-    fdt2.join();
-}
-
-void BulkContext::add_line(string &cmd)
-{
-    ++lines_count;
-    if((cmd != "{") && !blockFound)
-    {
-        cmds.push_back(cmd);
-
-        if(cmds.metrics.commands == bulk_size)
-        {
-            dump_block();
-        }
-    }
-    else
-    {
-        if(!blockFound)
-        {
-            blockFound = true;
-            if(cmds.metrics.commands)
-            {
-                dump_block();
-            }
-            return;
-        }
-
-        if(cmd == "{")
-        {
-            ++nestedBlocksCount;
-        }
-        else if(cmd == "}")
-        {
-            if (nestedBlocksCount > 0)
-            {
-                --nestedBlocksCount;
-                //++cmds.metrics.blocks;
-            }
-            else
-            {
-                //++cmds.metrics.blocks;
-                dump_block();
-                blockFound = false;
-            }
-        }
-        else
-        {
-            cmds.push_back_block(cmd);
-        }
-    }
-}
-
-void BulkContext::dump_block()
-{
-    ++cmds.metrics.blocks;
-    dumper->dump_commands(cmds);
-    metrics += cmds.metrics;
-    cmds.clear();
-}
-
-void BulkContext::end_input()
-{
-    if(cmds.metrics.commands && !blockFound)
-    {
-        dump_block();
-    }
+    cout << "dtor BulkContext" << endl;
     dumper->stop_dumping();
     cdt.join();
     fdt1.join();
     fdt2.join();
 }
 
+void BulkContext::add_line(string &cmd, BulkSessionProcessor &session_cmds, BulkSessionProcessor &shared_cmds)
+{
+    ++session_cmds.lines_count;
+    if((cmd != "{") && !session_cmds.blockFound)
+    {
+        shared_cmds.cmds.push_back(cmd);
+
+        if(shared_cmds.cmds.metrics.commands == bulk_size)
+        {
+            dump_block(shared_cmds);
+        }
+    }
+    else
+    {
+        if(!session_cmds.blockFound)
+        {
+            session_cmds.blockFound = true;
+//            if(session_cmds.cmds.metrics.commands)
+//            {
+//                dump_block();
+//            }
+            return;
+        }
+
+        if(cmd == "{")
+        {
+            ++session_cmds.nestedBlocksCount;
+        }
+        else if(cmd == "}")
+        {
+            if (session_cmds.nestedBlocksCount > 0)
+            {
+                --session_cmds.nestedBlocksCount;
+            }
+            else
+            {
+                dump_block(session_cmds);
+                session_cmds.blockFound = false;
+            }
+        }
+        else
+        {
+            session_cmds.cmds.push_back_block(cmd);
+        }
+    }
+}
+
+void BulkContext::dump_block(BulkSessionProcessor &commands)
+{
+    ++commands.cmds.metrics.blocks;
+    dumper->dump_commands(commands.cmds);
+    commands.metrics += commands.cmds.metrics;
+    commands.cmds.clear();
+}
+
+//void BulkContext::end_input()
+//{
+////    if(cmds.metrics.commands && !blockFound)
+////    {
+////        dump_block();
+////    }
+////    dumper->stop_dumping();
+//    cdt.join();
+//    fdt1.join();
+//    fdt2.join();
+//}
+
 void BulkContext::print_metrics()
 {
-    cout << "main: " << lines_count << " lines, "
-                     << metrics.commands << " commands, "
-                     << metrics.blocks << " blocks"
-                     << endl;
+//    cout << "main: " << lines_count << " lines, "
+//                     << metrics.commands << " commands, "
+//                     << metrics.blocks << " blocks"
+//                     << endl;
 
     Metrics::print_metrics(log_metr, "log");
     Metrics::print_metrics(file1_metr, "file1");
