@@ -6,7 +6,7 @@ sudo: false
 addons:
   apt:
    packages:
-     - libboost-all-dev 
+     - libboost-system-dev
      - libpthread-stubs0-dev
 
 script:
