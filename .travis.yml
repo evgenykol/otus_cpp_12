@@ -2,11 +2,12 @@ language: cpp
 compiler: clang
 sudo: false
 
-before_install:
-  - sudo apt-get update
-
-install: 
-  - sudo apt-get install libpthread-stubs0-dev
+#Install dependencies
+addons:
+  apt:
+   packages:
+     - libboost-all-dev 
+     - libpthread-stubs0-dev
 
 script:
   - cmake .
