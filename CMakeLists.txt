@@ -13,20 +13,20 @@ find_package(Threads)
 
 configure_file(version.h.in version.h)
 
-#add_library(bulk_lib bulk.h bulk.cpp)
+add_library(bulk_lib bulk.h bulk.cpp)
 
 add_executable(bulk_server main.cpp)
 
-set_target_properties(bulk_server #bulk_lib
+set_target_properties(bulk_server bulk_lib
         PROPERTIES
                 CXX_STANDARD 14
                 CXX_STANDARD_REQUIRED ON
                 CMAKE_CXX_EXTENSIONS OFF
-                COMPILE_DEFINITIONS BOOST_ASIO_ENABLE_HANDLER_TRACKING
+                #COMPILE_DEFINITIONS BOOST_ASIO_ENABLE_HANDLER_TRACKING
                 COMPILE_OPTIONS -Wpedantic -Wall -Wextra
 )
 
-target_link_libraries(bulk_server #bulk_lib
+target_link_libraries(bulk_server bulk_lib
     ${Boost_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
 )
