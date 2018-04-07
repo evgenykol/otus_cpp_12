@@ -225,10 +225,9 @@ BulkSessionProcessor::BulkSessionProcessor()
 }
 
 
-BulkContext::BulkContext(/*size_t bulk_size_*/)
+BulkContext::BulkContext()
 {
-    cout << "ctor BulkContext" << endl;
-    //bulk_size = bulk_size_;
+    //cout << "ctor BulkContext" << endl;
 
     dumper = make_shared<Dumper>();
     conDumper = make_shared<ConsoleDumper>(dumper);
@@ -270,10 +269,6 @@ void BulkContext::add_line(string &cmd, BulkSessionProcessor &session_cmds, Bulk
         if(!session_cmds.blockFound)
         {
             session_cmds.blockFound = true;
-//            if(session_cmds.cmds.metrics.commands)
-//            {
-//                dump_block();
-//            }
             return;
         }
 
@@ -307,18 +302,6 @@ void BulkContext::dump_block(BulkSessionProcessor &commands)
     commands.metrics += commands.cmds.metrics;
     commands.cmds.clear();
 }
-
-//void BulkContext::end_input()
-//{
-////    if(cmds.metrics.commands && !blockFound)
-////    {
-////        dump_block();
-////    }
-////    dumper->stop_dumping();
-//    cdt.join();
-//    fdt1.join();
-//    fdt2.join();
-//}
 
 void BulkContext::print_metrics()
 {

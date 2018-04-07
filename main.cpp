@@ -13,13 +13,10 @@
 using namespace std;
 using boost::asio::ip::tcp;
 
-
-
 class bulk_participant
 {
 public:
     virtual ~bulk_participant() {}
-    //virtual void deliver(const chat_message& msg) = 0;
 };
 
 typedef std::shared_ptr<bulk_participant> bulk_participant_ptr;
@@ -34,22 +31,12 @@ public:
 
     void join(bulk_participant_ptr participant)
     {
-        //cout << "bulk_room join" << endl;
         participants_.emplace(std::make_pair(participant, bulk::BulkSessionProcessor()));
     }
 
     void leave(bulk_participant_ptr participant)
     {
-        //cout << "bulk_room leave" << endl;
         participants_.erase(participant);
-//        if (participants_.empty())
-//        {
-//            if(commands.metrics.commands)
-//            {
-//                bulk_.dump_block(commands);
-//            }
-//            bulk_.print_metrics();
-//        }
     }
 
     void deliver(const bulk_participant_ptr participant, std::string& msg)
@@ -60,7 +47,6 @@ public:
 private:
     std::map<bulk_participant_ptr, bulk::BulkSessionProcessor> participants_;
     bulk::BulkSessionProcessor commands;
-
     bulk::BulkContext bulk_;
 };
 
@@ -92,8 +78,6 @@ public:
     void do_read_message()
     {
         auto self(shared_from_this());
-//        boost::asio::async_read_until(socket_, sb, "\n",
-//                                [this, self](boost::system::error_code ec, std::size_t /*length*/)
         boost::asio::async_read(socket_,
                                 boost::asio::buffer(str),
                                 boost::bind(&bulk_session::read_complete, this, str, _1, _2),
@@ -101,13 +85,6 @@ public:
         {
             if (!ec)
             {
-//                std::istream is(&sb);
-//                std::string line;
-//                std::getline(is, line);
-//                sb.consume(sb.size());
-//                cout << line << endl;
-
-                //cout.write(str, strnlen(str, 512));
                 std::string s = string{str};
                 s.erase(std::remove(s.begin(), s.end(), '\n'), s.end());
                 room_.deliver(self, s);
@@ -116,16 +93,14 @@ public:
             }
             else
             {
-                //cout << "do_read_message ec = " << ec.message() << endl;
                 room_.leave(shared_from_this());
             }
         });
     }
 
     tcp::socket socket_;
-    char str[512];
-    boost::asio::streambuf sb;
     bulk_room &room_;
+    char str[512];
 };
 
 class bulk_server
@@ -137,8 +112,6 @@ public:
         : acceptor_(io_service, endpoint),
           socket_(io_service)
     {
-//        bulk_ = make_shared<bulk::BulkContext>(bulk_size_);
-//        room_ = make_shared<bulk_room>(*bulk_);
         room_.set_bulk_size(bulk_size_);
         do_accept();
     }
@@ -155,7 +128,7 @@ private:
             }
             else
             {
-                cout << "do_accept error " << ec.message() << endl;
+                cout << "accept error " << ec.message() << endl;
             }
 
             do_accept();
@@ -165,7 +138,6 @@ private:
     tcp::acceptor acceptor_;
     tcp::socket socket_;
     bulk_room room_;
-    //shared_ptr<bulk::BulkContext> bulk_;
 };
 
 int main(int argc, char* argv[])
@@ -185,7 +157,7 @@ int main(int argc, char* argv[])
         {
             port = atoi(argv[1]);
             bulk_size = atoi(argv[2]);
-            cout << "bulk_server starting on port: " << port << ", bulk size: " << bulk_size << endl;
+            //cout << "bulk_server starting on port: " << port << ", bulk size: " << bulk_size << endl;
         }
         else
         {
@@ -199,9 +171,9 @@ int main(int argc, char* argv[])
         bulk_server server(io_service, endpoint, bulk_size);
 
         vector<thread> thread_pool;
-        for(int i = 0; i < 2; ++i)
+        for(int i = 0; i < 3; ++i)
         {
-            thread_pool.emplace_back(thread([&]{io_service.run();}));
+            thread_pool.emplace_back(thread([&] {io_service.run();}));
         }
 
         for (auto &thr : thread_pool)
