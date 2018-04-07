@@ -224,10 +224,11 @@ BulkSessionProcessor::BulkSessionProcessor()
     lines_count = 0;
 }
 
-BulkContext::BulkContext(size_t bulk_size_)
+
+BulkContext::BulkContext(/*size_t bulk_size_*/)
 {
     cout << "ctor BulkContext" << endl;
-    bulk_size = bulk_size_;
+    //bulk_size = bulk_size_;
 
     dumper = make_shared<Dumper>();
     conDumper = make_shared<ConsoleDumper>(dumper);
@@ -237,7 +238,6 @@ BulkContext::BulkContext(size_t bulk_size_)
     cdt = thread(&ConsoleDumper::dumper, this->conDumper, std::ref(log_metr));
     fdt1 = thread(&FileDumper::dumper, this->fileDumper, std::ref(file1_metr));
     fdt2 = thread(&FileDumper::dumper, this->fileDumper, std::ref(file2_metr));
-
 }
 
 BulkContext::~BulkContext()
@@ -249,6 +249,10 @@ BulkContext::~BulkContext()
     fdt2.join();
 }
 
+void BulkContext::set_bulk_size(size_t bulk_size_)
+{
+    bulk_size = bulk_size_;
+}
 void BulkContext::add_line(string &cmd, BulkSessionProcessor &session_cmds, BulkSessionProcessor &shared_cmds)
 {
     ++session_cmds.lines_count;

@@ -7,6 +7,7 @@
 #include <atomic>
 #include <queue>
 #include <memory>
+#include <thread>
 
 namespace bulk{
 
@@ -130,9 +131,11 @@ public:
     std::shared_ptr<ConsoleDumper> conDumper;
     std::shared_ptr<FileDumper> fileDumper;
 
-    BulkContext(size_t bulk_size_);
+    BulkContext();
+    //BulkContext(size_t bulk_size_);
     ~BulkContext();
 
+    void set_bulk_size(size_t bulk_size_);
     void add_line(std::string &cmd, BulkSessionProcessor &session_cmds, BulkSessionProcessor &shared_cmds);
     void dump_block(BulkSessionProcessor &commands);
     //void end_input();

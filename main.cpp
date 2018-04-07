@@ -27,17 +27,20 @@ typedef std::shared_ptr<bulk_participant> bulk_participant_ptr;
 class bulk_room
 {
 public:
-    bulk_room(bulk::BulkContext &bulk) : bulk_(bulk) {}
+    void set_bulk_size(size_t bulk_size)
+    {
+        bulk_.set_bulk_size(bulk_size);
+    }
 
     void join(bulk_participant_ptr participant)
     {
-        cout << "bulk_room join" << endl;
+        //cout << "bulk_room join" << endl;
         participants_.emplace(std::make_pair(participant, bulk::BulkSessionProcessor()));
     }
 
     void leave(bulk_participant_ptr participant)
     {
-        cout << "bulk_room leave" << endl;
+        //cout << "bulk_room leave" << endl;
         participants_.erase(participant);
 //        if (participants_.empty())
 //        {
@@ -58,7 +61,7 @@ private:
     std::map<bulk_participant_ptr, bulk::BulkSessionProcessor> participants_;
     bulk::BulkSessionProcessor commands;
 
-    bulk::BulkContext &bulk_;
+    bulk::BulkContext bulk_;
 };
 
 class bulk_session
@@ -113,7 +116,7 @@ public:
             }
             else
             {
-                cout << "do_read_message ec = " << ec.message() << endl;
+                //cout << "do_read_message ec = " << ec.message() << endl;
                 room_.leave(shared_from_this());
             }
         });
@@ -134,8 +137,9 @@ public:
         : acceptor_(io_service, endpoint),
           socket_(io_service)
     {
-        bulk_ = make_shared<bulk::BulkContext>(bulk_size_);
-        room_ = make_shared<bulk_room>(*bulk_);
+//        bulk_ = make_shared<bulk::BulkContext>(bulk_size_);
+//        room_ = make_shared<bulk_room>(*bulk_);
+        room_.set_bulk_size(bulk_size_);
         do_accept();
     }
 
@@ -147,7 +151,7 @@ private:
         {
             if (!ec)
             {
-                std::make_shared<bulk_session>(std::move(socket_), *room_)->start();
+                std::make_shared<bulk_session>(std::move(socket_), room_)->start();
             }
             else
             {
@@ -160,8 +164,8 @@ private:
 
     tcp::acceptor acceptor_;
     tcp::socket socket_;
-    shared_ptr<bulk_room> room_;
-    shared_ptr<bulk::BulkContext> bulk_;
+    bulk_room room_;
+    //shared_ptr<bulk::BulkContext> bulk_;
 };
 
 int main(int argc, char* argv[])
@@ -193,7 +197,17 @@ int main(int argc, char* argv[])
         tcp::endpoint endpoint(tcp::v4(), port);
 
         bulk_server server(io_service, endpoint, bulk_size);
-        io_service.run();
+
+        vector<thread> thread_pool;
+        for(int i = 0; i < 2; ++i)
+        {
+            thread_pool.emplace_back(thread([&]{io_service.run();}));
+        }
+
+        for (auto &thr : thread_pool)
+        {
+            thr.join();
+        }
     }
     catch (std::exception& e)
     {
