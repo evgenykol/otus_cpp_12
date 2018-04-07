@@ -1,0 +1,14 @@
+language: cpp
+compiler: clang
+sudo: false
+
+script:
+  - cmake .
+  - cmake --build .
+  - cmake --build . --target package
+
+deploy:
+  - provider: script
+    skip_cleanup: true
+    script:
+    - curl -T bulk_server-0.0.$TRAVIS_BUILD_NUMBER-Linux.deb -uevgenykol:$BINTRAY_API_KEY "https://api.bintray.com/content/evgenykol/otus_cpp_01/bulk_server/$TRAVIS_BUILD_NUMBER/bulk_server-0.0.$TRAVIS_BUILD_NUMBER-Linux.deb;deb_distribution=trusty;deb_component=main;deb_architecture=amd64;publish=1"
