@@ -1,6 +1,4 @@
 #include <iostream>
-#include <deque> //check
-#include <set>   //check
 #include <map>
 
 #include <boost/asio.hpp>
@@ -37,10 +35,19 @@ public:
     void leave(bulk_participant_ptr participant)
     {
         participants_.erase(participant);
+        if (participants_.empty())
+        {
+            if(commands.cmds.metrics.commands > 0)
+            {
+                unique_lock<mutex> lk(m);
+                bulk_.dump_block(commands);
+            }
+        }
     }
 
     void deliver(const bulk_participant_ptr participant, std::string& msg)
     {
+        unique_lock<mutex> lk(m);
         bulk_.add_line(msg, participants_[participant], commands);
     }
 
@@ -48,6 +55,7 @@ private:
     std::map<bulk_participant_ptr, bulk::BulkSessionProcessor> participants_;
     bulk::BulkSessionProcessor commands;
     bulk::BulkContext bulk_;
+    std::mutex m;
 };
 
 class bulk_session
